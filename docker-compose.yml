@@ -1,0 +1,25 @@
+services:
+  # The React Frontend
+  frontend:
+    build: .
+    command: npm run dev -- --host
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    stdin_open: true
+    tty: true
+
+  # The Hono Backend (Cloudflare Emulation)
+  backend:
+    build: .
+    # Point Wrangler to the 'dist' folder and tell it where the functions are
+    command: npx wrangler pages dev dist --compatibility-date=2024-01-01 --ip 0.0.0.0 --port 8788
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "8788:8788"
+    depends_on:
+      - frontend

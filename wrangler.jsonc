@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bizplangen",
+  "main": "src/entry-server.js", 
+  "compatibility_date": "2026-02-11",
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  "ai": { "binding": "AI" }
+}
