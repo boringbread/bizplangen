@@ -13,5 +13,14 @@ export default defineConfig({
     hmr: {
       clientPort: 5173, // Ensure the browser knows where to find the websocket
     },
+    // Smooth DX in Docker:
+    // - Open http://localhost:5173 for the frontend + HMR
+    // - Forward /api/* calls to the Wrangler Pages dev server running in the `backend` service
+    proxy: {
+      '/api': {
+        target: 'http://backend:8788',
+        changeOrigin: true,
+      },
+    },
   },
 })

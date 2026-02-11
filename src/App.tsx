@@ -1,9 +1,33 @@
 import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
+type PlanSection = { markdown: string }
+
+type Plan = {
+  meta: { industry: string; budget: string; vision: string }
+  sections: {
+    executive_summary: PlanSection
+    problem: PlanSection
+    solution: PlanSection
+    market: PlanSection & { tam_sam_som?: { tam: string; sam: string; som: string } }
+    gtm: PlanSection
+    business_model: PlanSection
+    competition: PlanSection
+    operations: PlanSection
+    team: PlanSection
+    risks: PlanSection
+    milestones: PlanSection
+    financials: PlanSection & {
+      assumptions?: string[]
+      projection_table?: { headers: string[]; rows: string[][] }
+    }
+  }
+}
+
 export default function App() {
   const [loading, setLoading] = useState(false)
-  const [planText, setPlanText] = useState("") // Store the accumulated string
+  const [plan, setPlan] = useState<Plan | null>(null)
+  const [error, setError] = useState<string | null>(null)
   
   // State for form inputs
   const [industry, setIndustry] = useState("")
@@ -13,31 +37,41 @@ export default function App() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setPlanText(""); // Reset for a new plan
+    setPlan(null);
+    setError(null);
 
-    const response = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ industry, budget, vision }),
-    });
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ industry, budget, vision }),
+      });
 
-    if (!response.body) return;
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(`Request failed (${response.status}). ${text}`)
+      }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      
-      const chunk = decoder.decode(value, { stream: true });
-      
-      // CRITICAL: Use the functional update (prev => prev + chunk) 
-      // to ensure React doesn't miss rapid updates from the stream.
-      setPlanText((prev) => prev + chunk); 
+      const data = (await response.json()) as Plan
+      setPlan(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  const renderSection = (title: string, markdown?: string) => {
+    if (!markdown) return null
+    return (
+      <section className="mb-8">
+        <h2 className="text-2xl font-bold text-white mb-3">{title}</h2>
+        <div className="prose prose-invert prose-indigo max-w-none">
+          <ReactMarkdown>{markdown}</ReactMarkdown>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 py-12 px-6">
@@ -85,11 +119,29 @@ export default function App() {
           </button>
         </form>
 
+        {/* Error */}
+        {error && (
+          <div className="bg-red-900/30 border border-red-700 text-red-100 p-6 rounded-2xl mb-8">
+            <div className="font-bold mb-2">Error</div>
+            <pre className="whitespace-pre-wrap text-sm">{error}</pre>
+          </div>
+        )}
+
         {/* Result Area */}
-        {planText && (
-          <div className="prose prose-invert prose-indigo max-w-none bg-slate-800/30 border border-white/10 p-10 rounded-3xl backdrop-blur-md">
-            <ReactMarkdown>{planText}</ReactMarkdown>
-            {loading && <span className="inline-block w-2 h-5 ml-1 bg-indigo-500 animate-pulse align-middle" />}
+        {plan && (
+          <div className="bg-slate-800/30 border border-white/10 p-10 rounded-3xl backdrop-blur-md">
+            {renderSection('Executive Summary', plan.sections?.executive_summary?.markdown)}
+            {renderSection('Problem', plan.sections?.problem?.markdown)}
+            {renderSection('Solution', plan.sections?.solution?.markdown)}
+            {renderSection('Market', plan.sections?.market?.markdown)}
+            {renderSection('Go-To-Market', plan.sections?.gtm?.markdown)}
+            {renderSection('Business Model', plan.sections?.business_model?.markdown)}
+            {renderSection('Competition', plan.sections?.competition?.markdown)}
+            {renderSection('Operations', plan.sections?.operations?.markdown)}
+            {renderSection('Team', plan.sections?.team?.markdown)}
+            {renderSection('Risks', plan.sections?.risks?.markdown)}
+            {renderSection('Milestones', plan.sections?.milestones?.markdown)}
+            {renderSection('Financials', plan.sections?.financials?.markdown)}
           </div>
         )}
       </div>
