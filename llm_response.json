@@ -1,0 +1,45 @@
+{
+    "meta": {
+        "industry": "Coffee Shop",
+        "budget": "$50k",
+        "vision": "Quite vibe, nice view"
+    },
+    "sections": {
+        "executive_summary": {
+            "markdown": "Our startup, \"Cozy Cup,\" aims to create a serene and visually appealing coffee shop experience in a prime location. With a budget of $50k, we will transform a vacant space into a cozy haven that attracts coffee connoisseurs and casual visitors alike."
+        },
+        "problem": {
+            "markdown": "The coffee shop industry is saturated with generic, high-volume establishments that prioritize speed over quality. Consumers are seeking unique, Instagrammable experiences that offer a respite from the hustle and bustle of daily life. Existing coffee shops often lack a distinct atmosphere, failing to create a loyal customer base."
+        },
+        "solution": {
+            "markdown": "Cozy Cup will differentiate itself through its tranquil ambiance, stunning views, and high-quality specialty coffee. Our menu will feature a curated selection of artisanal coffee drinks, teas, and pastries, all made with locally sourced ingredients. The interior design will incorporate natural materials, comfortable seating areas, and plenty of greenery to create a calming atmosphere."
+        },
+        "market": {
+            "markdown": "The target market for Cozy Cup is coffee enthusiasts and individuals seeking a relaxing atmosphere. Our market research indicates:\n\n* Total Addressable Market (TAM): $1.5 million (based on average annual revenue per coffee shop in the area)\n* Serviceable Available"
+        },
+        "gtm": {
+            "markdown": ""
+        },
+        "business_model": {
+            "markdown": ""
+        },
+        "competition": {
+            "markdown": ""
+        },
+        "operations": {
+            "markdown": ""
+        },
+        "team": {
+            "markdown": ""
+        },
+        "risks": {
+            "markdown": ""
+        },
+        "milestones": {
+            "markdown": ""
+        },
+        "financials": {
+            "markdown": ""
+        }
+    }
+}

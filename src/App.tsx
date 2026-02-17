@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 type PlanSection = { markdown: string }
@@ -9,7 +9,7 @@ type Plan = {
     executive_summary: PlanSection
     problem: PlanSection
     solution: PlanSection
-    market: PlanSection & { tam_sam_som?: { tam: string; sam: string; som: string } }
+    market: PlanSection & { tam_sam_som?: { tam: string; sam:string; som: string } }
     gtm: PlanSection
     business_model: PlanSection
     competition: PlanSection
@@ -24,40 +24,107 @@ type Plan = {
   }
 }
 
+// Type for the API response from the /plan/:id endpoint
+type PlanStatusResponse = {
+  id: string
+  status: 'queued' | 'running' | 'done' | 'error'
+  result_json?: Plan 
+  error_message?: string
+}
+
 export default function App() {
   const [loading, setLoading] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   
-  // State for form inputs
   const [industry, setIndustry] = useState("")
   const [budget, setBudget] = useState("")
   const [vision, setVision] = useState("")
 
+  const pollingIntervalRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!jobId) return
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/plan/${jobId}`)
+        if (!response.ok) {
+          throw new Error(`Polling failed: ${response.statusText}`)
+        }
+        
+        const data = await response.json() as PlanStatusResponse;
+
+        if (data.status === 'done') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+          setPlan(data.result_json ?? null)
+          setLoading(false)
+          setJobId(null)
+        } else if (data.status === 'error') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+          setError(data.error_message || 'An unknown error occurred during generation.')
+          setLoading(false)
+          setJobId(null)
+        }
+        // If 'queued' or 'running', do nothing and let it poll again
+      } catch (err) {
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+        setError(err instanceof Error ? err.message : String(err))
+        setLoading(false)
+        setJobId(null)
+      }
+    }
+
+    // Start polling immediately and then every 3 seconds
+    poll()
+    pollingIntervalRef.current = window.setInterval(poll, 3000)
+
+  }, [jobId])
+
+
   const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setPlan(null);
-    setError(null);
+    e.preventDefault()
+    if (loading) return
+
+    setLoading(true)
+    setPlan(null)
+    setError(null)
+    setJobId(null)
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
 
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ industry, budget, vision }),
-      });
+      })
 
       if (!response.ok) {
         const text = await response.text().catch(() => '')
-        throw new Error(`Request failed (${response.status}). ${text}`)
+        throw new Error(`Failed to start job (${response.status}). ${text}`)
       }
 
-      const data = (await response.json()) as Plan
-      setPlan(data)
+      const { jobId: newJobId } = await response.json()
+      if (!newJobId) {
+        throw new Error('API did not return a job ID.')
+      }
+      setJobId(newJobId)
+      // Polling will be handled by the useEffect hook
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false);
+      setLoading(false)
     }
   };
 
@@ -83,7 +150,6 @@ export default function App() {
           <p className="text-slate-400 text-lg">AI-powered strategy in seconds.</p>
         </header>
 
-        {/* Input Form */}
         <form onSubmit={handleGenerate} className="bg-slate-800/50 border border-slate-700 p-8 rounded-3xl shadow-xl mb-12">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -119,7 +185,6 @@ export default function App() {
           </button>
         </form>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-100 p-6 rounded-2xl mb-8">
             <div className="font-bold mb-2">Error</div>
@@ -127,7 +192,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Result Area */}
         {plan && (
           <div className="bg-slate-800/30 border border-white/10 p-10 rounded-3xl backdrop-blur-md">
             {renderSection('Executive Summary', plan.sections?.executive_summary?.markdown)}
