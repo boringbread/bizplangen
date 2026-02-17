@@ -9,10 +9,13 @@
     "preview": "wrangler pages dev --proxy 5173 -- npm run dev"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "hono": "^4.11.9",
+    "lucide-react": "^0.568.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-markdown": "^10.1.0"
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.7.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.24.0",
@@ -21,6 +24,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/recharts": "^1.8.29",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.24",
     "eslint": "^9.39.1",
