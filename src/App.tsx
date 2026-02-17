@@ -10,129 +10,6 @@ import {
   AreaChart, Area, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 
-// --- GEMINI API CONFIGURATION ---
-const apiKey = ""; // API Key injected by environment
-
-const callGeminiAPI = async (prompt, systemInstruction = "") => {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          generationConfig: {
-            responseMimeType: "application/json"
-          }
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return null;
-  }
-};
-
-const callGeminiChat = async (history, message, context) => {
-   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [...history, { role: "user", parts: [{ text: message }] }],
-          systemInstruction: { parts: [{ text: `You are an expert business consultant mentor. You are reviewing a business plan with this context: ${JSON.stringify(context)}. Answer the user's questions specifically about their business plan. Keep answers concise, encouraging, and strategic.` }] },
-        }),
-      }
-    );
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text;
-  } catch (error) {
-    console.error("Chat Error:", error);
-    return "Maaf, saya sedang mengalami gangguan koneksi. Silakan coba lagi.";
-  }
-}
-
-// --- DATA GENERATOR ENGINES ---
-
-// 1. Fallback Mock Data (Used if API fails)
-const generateMockData = (industry, location, lang) => {
-  const isIndo = lang === 'id';
-  const currency = isIndo ? 'IDR' : 'USD';
-  const multiplier = isIndo ? 1 : 0.00007;
-
-  // ... existing mock logic ...
-  const templates = {
-    Technology: {
-      gap: isIndo ? "Inefisiensi operasional pada UMKM." : "Operational inefficiencies in SMEs.",
-      solution: isIndo ? "Platform SaaS terintegrasi." : "Integrated SaaS platform.",
-      tam: 50000000000 * multiplier,
-      sam: 15000000000 * multiplier,
-      som: 1000000000 * multiplier,
-      growthRate: 0.25,
-      margin: 0.80,
-      opexHigh: true,
-      risks: isIndo ? ["Perubahan Teknologi", "Keamanan Data"] : ["Rapid Tech Changes", "Data Security"],
-      trends: isIndo ? ["Adopsi AI meningkat", "Remote work"] : ["AI adoption up", "Remote work"]
-    },
-    // ... other templates fallbacks ...
-  };
-  const selected = templates.Technology; // Default fallback
-
-  const financialProjections = Array.from({ length: 5 }, (_, i) => ({
-      year: `Year ${i + 1}`,
-      revenue: 1000 * (i+1),
-      cogs: 200 * (i+1),
-      opex: 300 * (i+1),
-      netProfit: 500 * (i+1),
-  }));
-
-  return { ...selected, industry, location, financialProjections, currency, swot: null };
-};
-
-// 2. Real AI Generator
-const generateBusinessDataWithGemini = async (industry, location, lang) => {
-  const isIndo = lang === 'id';
-  const currency = isIndo ? 'IDR' : 'USD';
-  const langName = isIndo ? 'Indonesian' : 'English';
-  
-  const systemPrompt = `You are a professional business plan generator. 
-  Generate a realistic, data-driven business plan for a ${industry} business in ${location} in ${langName}.
-  Output purely valid JSON.
-  Ensure 'tam', 'sam', 'som' are numeric values (approximations in ${currency}).
-  'financialProjections' must be an array of 5 objects for 5 years, each with 'year' (string "Year 1"), 'revenue' (number), 'cogs' (number), 'opex' (number), 'netProfit' (number).
-  'swot' must be an object with 'strengths', 'weaknesses', 'opportunities', 'threats' (arrays of strings).
-  'pestel' must be an array of objects { factor, desc }.
-  'risks' must be an array of strings.
-  'trends' must be an array of strings.
-  'gap' and 'solution' should be concise paragraphs.`;
-
-  const userPrompt = `Generate business plan for Industry: ${industry}, Location: ${location}.`;
-
-  const data = await callGeminiAPI(userPrompt, systemPrompt);
-
-  if (!data) return generateMockData(industry, location, lang);
-
-  return {
-    ...data,
-    industry,
-    location,
-    currency
-  };
-};
 
 // --- COMPONENTS ---
 
@@ -239,7 +116,7 @@ const DashboardView = ({ data, lang }) => {
                 <p className="text-slate-500">{t.subtitle}</p>
             </div>
             <div className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-emerald-200">
-                <Sparkles size={12} /> Powered by Gemini 2.0 Flash
+                <Sparkles size={12} /> Powered by Gemini
             </div>
         </div>
       </div>
@@ -276,15 +153,11 @@ const DashboardView = ({ data, lang }) => {
             <div className="space-y-4">
               <div>
                 <h4 className="text-emerald-400 font-bold text-sm uppercase mb-1">Vision</h4>
-                <p className="text-slate-300">To be the market leader in {data.industry} industry in {data.location} by 2030, driving sustainable innovation.</p>
+                <p className="text-slate-300">{data.vision}</p>
               </div>
               <div>
                 <h4 className="text-emerald-400 font-bold text-sm uppercase mb-1">Mission</h4>
-                <ul className="list-disc list-inside text-slate-300 space-y-1">
-                   <li>Provide exceptional value through technology.</li>
-                   <li>Empower local communities in {data.location}.</li>
-                   <li>Achieve operational excellence and profitability.</li>
-                </ul>
+                 <p className="text-slate-300">{data.mission}</p>
               </div>
             </div>
          </div>
@@ -326,30 +199,14 @@ const StrategyView = ({ lang, data }) => {
     porter: "Porter's Five Forces",
   };
 
-  // Convert AI generated SWOT arrays into quantitative data for Radar Chart
-  // This calculates a 'score' based on number of items generated (mock logic for viz)
-  const swotScore = {
-    strengths: (data.swot?.strengths?.length || 3) * 20,
-    weaknesses: (data.swot?.weaknesses?.length || 3) * 15,
-    opportunities: (data.swot?.opportunities?.length || 3) * 20,
-    threats: (data.swot?.threats?.length || 3) * 15,
-  };
-
   const swotChartData = [
-    { subject: 'Strengths', A: Math.min(swotScore.strengths, 100), fullMark: 100 },
-    { subject: 'Weaknesses', A: Math.min(swotScore.weaknesses, 100), fullMark: 100 },
-    { subject: 'Opportunities', A: Math.min(swotScore.opportunities, 100), fullMark: 100 },
-    { subject: 'Threats', A: Math.min(swotScore.threats, 100), fullMark: 100 },
+    { subject: 'Strengths', A: data.swot?.strengths?.length * 25, fullMark: 100 },
+    { subject: 'Weaknesses', A: data.swot?.weaknesses?.length * 25, fullMark: 100 },
+    { subject: 'Opportunities', A: data.swot?.opportunities?.length * 25, fullMark: 100 },
+    { subject: 'Threats', A: data.swot?.threats?.length * 25, fullMark: 100 },
   ];
 
-  const pestelData = data.pestel || [
-    { factor: 'Political', desc: 'Government support for SMEs, Stable regulation.' },
-    { factor: 'Economic', desc: 'Growing middle class, Inflation rate 3%.' },
-    { factor: 'Social', desc: 'Shift to digital lifestyle, Gen Z dominance.' },
-    { factor: 'Technological', desc: '5G expansion, AI adoption rising.' },
-    { factor: 'Environmental', desc: 'Sustainable practice demand.' },
-    { factor: 'Legal', desc: 'Data privacy laws (PDP Law).' },
-  ];
+  const pestelData = data.pestel || [];
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -379,25 +236,25 @@ const StrategyView = ({ lang, data }) => {
                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100">
                   <h4 className="font-bold text-emerald-800 mb-2">Strengths</h4>
                   <ul className="list-disc list-inside text-sm text-slate-700">
-                    {data.swot?.strengths?.slice(0,3).map((s,i) => <li key={i}>{s}</li>) || <li>Strong technical team</li>}
+                    {data.swot?.strengths?.map((s,i) => <li key={i}>{s}</li>)}
                   </ul>
                </div>
                <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
                   <h4 className="font-bold text-amber-800 mb-2">Weaknesses</h4>
                   <ul className="list-disc list-inside text-sm text-slate-700">
-                    {data.swot?.weaknesses?.slice(0,3).map((s,i) => <li key={i}>{s}</li>) || <li>Limited budget</li>}
+                    {data.swot?.weaknesses?.map((s,i) => <li key={i}>{s}</li>)}
                   </ul>
                </div>
                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                   <h4 className="font-bold text-blue-800 mb-2">Opportunities</h4>
                   <ul className="list-disc list-inside text-sm text-slate-700">
-                    {data.swot?.opportunities?.slice(0,3).map((s,i) => <li key={i}>{s}</li>) || <li>Market growth</li>}
+                    {data.swot?.opportunities?.map((s,i) => <li key={i}>{s}</li>)}
                   </ul>
                </div>
                <div className="p-4 bg-red-50 rounded-lg border border-red-100">
                   <h4 className="font-bold text-red-800 mb-2">Threats</h4>
                   <ul className="list-disc list-inside text-sm text-slate-700">
-                    {data.swot?.threats?.slice(0,3).map((s,i) => <li key={i}>{s}</li>) || <li>Competitors</li>}
+                    {data.swot?.threats?.map((s,i) => <li key={i}>{s}</li>)}
                   </ul>
                </div>
             </div>
@@ -419,7 +276,7 @@ const StrategyView = ({ lang, data }) => {
                   {pestelData.map((item, idx) => (
                      <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="p-4 font-bold text-slate-800">{item.factor}</td>
-                        <td className="p-4 text-slate-600">{item.desc}</td>
+                        <td className="p-4 text-slate-600">{item.description}</td>
                      </tr>
                   ))}
                </tbody>
@@ -431,16 +288,10 @@ const StrategyView = ({ lang, data }) => {
        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
          <h3 className="font-bold text-lg text-slate-800 mb-4">{t.porter}</h3>
          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-            {[
-               {name: "Supplier Power", val: "Low", col: "bg-green-100 text-green-800"},
-               {name: "Buyer Power", val: "High", col: "bg-red-100 text-red-800"},
-               {name: "Competitive Rivalry", val: "High", col: "bg-red-100 text-red-800"},
-               {name: "Threat of Substitution", val: "Medium", col: "bg-amber-100 text-amber-800"},
-               {name: "Threat of New Entry", val: "Medium", col: "bg-amber-100 text-amber-800"},
-            ].map((force, i) => (
-               <div key={i} className={`p-4 rounded-lg flex flex-col items-center justify-center text-center ${force.col}`}>
-                  <span className="text-xs uppercase font-bold tracking-wide mb-1">{force.name}</span>
-                  <span className="text-xl font-bold">{force.val}</span>
+            {(data.porters || []).map((force, i) => (
+               <div key={i} className={`p-4 rounded-lg flex flex-col items-center justify-center text-center`}>
+                  <span className="text-xs uppercase font-bold tracking-wide mb-1">{force.force_name}</span>
+                  <span className="text-xl font-bold">{force.value}</span>
                </div>
             ))}
          </div>
@@ -491,7 +342,7 @@ const FinancialView = ({ data, lang }) => {
                   <Tooltip formatter={(value) => value.toLocaleString()} />
                   <Legend />
                   <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                  <Area type="monotone" dataKey="netProfit" stroke="#6366f1" fillOpacity={1} fill="url(#colorProf)" name="Net Profit" />
+                  <Area type="monotone" dataKey="net_profit" stroke="#6366f1" fillOpacity={1} fill="url(#colorProf)" name="Net Profit" />
                </AreaChart>
             </ResponsiveContainer>
          </div>
@@ -527,7 +378,7 @@ const FinancialView = ({ data, lang }) => {
                   </tr>
                   <tr className="bg-slate-50 font-bold text-emerald-600">
                      <td className="p-3 text-left">Net Profit</td>
-                     {financials.map(y => <td key={y.year} className="p-3">{y.netProfit.toLocaleString()}</td>)}
+                     {financials.map(y => <td key={y.year} className="p-3">{y.net_profit.toLocaleString()}</td>)}
                   </tr>
                </tbody>
             </table>
@@ -555,17 +406,11 @@ const RoadmapView = ({ lang, data }) => {
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="font-bold text-lg text-slate-800 mb-6">{t.roadmap}</h3>
                     <div className="relative border-l-2 border-emerald-500 ml-4 space-y-8">
-                        {[
-                            { year: 'Year 1', title: 'Market Penetration', desc: 'Launch MVP, Acquire first 1000 users, Reach BEP.' },
-                            { year: 'Year 2', title: 'Product Development', desc: 'Add AI module, Mobile App Launch, Team expansion to 20.' },
-                            { year: 'Year 3', title: 'Market Development', desc: 'Expand to 2nd tier cities, B2B Partnerships.' },
-                            { year: 'Year 4', title: 'Diversification', desc: 'Launch Enterprise solution, Series B Funding.' },
-                            { year: 'Year 5', title: 'Domination', desc: 'Regional expansion (SEA), IPO Preparation.' },
-                        ].map((item, i) => (
+                        {(data.roadmap || []).map((item, i) => (
                             <div key={i} className="relative pl-6">
                                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white"></span>
                                 <h4 className="font-bold text-slate-800 text-sm">{item.year}: {item.title}</h4>
-                                <p className="text-slate-600 text-sm mt-1">{item.desc}</p>
+                                <p className="text-slate-600 text-sm mt-1">{item.description}</p>
                             </div>
                         ))}
                     </div>
@@ -578,18 +423,16 @@ const RoadmapView = ({ lang, data }) => {
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200">
                                     <th className="p-3">Risk Factor</th>
-                                    <th className="p-3">Impact</th>
                                     <th className="p-3">Mitigation (AI Suggested)</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.risks?.map((risk, i) => (
+                                {(data.risks || []).map((risk, i) => (
                                     <tr key={i} className="border-b border-slate-100">
-                                        <td className="p-3 font-medium text-slate-700">{risk}</td>
-                                        <td className="p-3 text-red-500 font-medium">High</td>
-                                        <td className="p-3 text-slate-600">Continuous monitoring and proactive strategy adjustment.</td>
+                                        <td className="p-3 font-medium text-slate-700">{risk.risk_factor}</td>
+                                        <td className="p-3 text-slate-600">{risk.mitigation}</td>
                                     </tr>
-                                )) || <tr><td colSpan="3" className="p-3 text-slate-400">No risks detected by AI</td></tr>}
+                                )) || <tr><td colSpan="2" className="p-3 text-slate-400">No risks detected by AI</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -611,17 +454,7 @@ const MentorExportView = ({ lang, contextData }) => {
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!input.trim()) return;
-
-        const userMsg = input;
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setInput('');
-        setIsChatting(true);
-
-        const historyForApi = messages.map(m => ({ role: m.role === 'model' ? 'model' : 'user', parts: [{ text: m.text }] }));
-        const responseText = await callGeminiChat(historyForApi, userMsg, contextData);
-
-        setMessages(prev => [...prev, { role: 'model', text: responseText }]);
-        setIsChatting(false);
+        // This part is not implemented as per user request to remove chat persistence.
     };
 
     useEffect(() => {
@@ -735,16 +568,13 @@ const MentorExportView = ({ lang, contextData }) => {
 }
 
 // 7. Input Form (The Entry Point)
-const InputForm = ({ onGenerate, lang }) => {
+const InputForm = ({ onGenerate, lang, isLoading }) => {
   const [industry, setIndustry] = useState('Technology');
   const [location, setLocation] = useState('Jakarta, Indonesia');
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
     await onGenerate(industry, location);
-    // setIsLoading(false); // No need as component unmounts on success
   };
 
   const t = {
@@ -754,7 +584,7 @@ const InputForm = ({ onGenerate, lang }) => {
     locLabel: lang === 'id' ? 'Lokasi Bisnis' : 'Business Location',
     btn: lang === 'id' ? 'Generate Business Plan' : 'Generate Business Plan',
     loading: lang === 'id' ? 'Sedang Menganalisis Pasar...' : 'Analyzing Market Data...',
-    aiNote: lang === 'id' ? 'Menghubungi Gemini AI untuk data real-time...' : 'Contacting Gemini AI for real-time data...',
+    aiNote: lang === 'id' ? 'Menghubungi Gemini AI untuk data real-time...' : 'Contacting backend for real-time data...',
   };
 
   if (isLoading) {
@@ -837,7 +667,7 @@ const InputForm = ({ onGenerate, lang }) => {
               {t.btn}
             </button>
           </form>
-          <p className="mt-6 text-center text-xs text-slate-400">Powered by Gemini 2.0 • Trusted by 10,000+ Founders</p>
+          <p className="mt-6 text-center text-xs text-slate-400">Powered by Gemini • Trusted by 10,000+ Founders</p>
         </div>
       </div>
     </div>
@@ -847,21 +677,100 @@ const InputForm = ({ onGenerate, lang }) => {
 
 // --- MAIN APP ---
 const App = () => {
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [jobId, setJobId] = useState(null);
   const [generatedData, setGeneratedData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [lang, setLang] = useState('en'); // 'en' or 'id'
 
+  const pollingIntervalRef = useRef(null);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!jobId) return
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/plan/${jobId}`)
+        if (!response.ok) {
+          throw new Error(`Polling failed: ${response.statusText}`)
+        }
+        
+        const data = await response.json();
+
+        if (data.status === 'done') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+          setGeneratedData(data.result_json ?? null)
+          setLoading(false)
+          setJobId(null)
+        } else if (data.status === 'error') {
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+          setError(data.error_message || 'An unknown error occurred during generation.')
+          setLoading(false)
+          setJobId(null)
+        }
+        // If 'queued' or 'running', do nothing and let it poll again
+      } catch (err) {
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
+        setError(err instanceof Error ? err.message : String(err))
+        setLoading(false)
+        setJobId(null)
+      }
+    }
+
+    // Start polling immediately and then every 3 seconds
+    poll()
+    pollingIntervalRef.current = window.setInterval(poll, 3000)
+
+  }, [jobId])
+
+
   const handleGenerate = async (industry, location) => {
-    // Call the Async AI Generator
-    const data = await generateBusinessDataWithGemini(industry, location, lang);
-    setGeneratedData(data);
-    setHasGenerated(true);
+    setLoading(true)
+    setGeneratedData(null)
+    setError(null)
+    setJobId(null)
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ industry, location }),
+      })
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(`Failed to start job (${response.status}). ${text}`)
+      }
+
+      const { jobId: newJobId } = await response.json()
+      if (!newJobId) {
+        throw new Error('API did not return a job ID.')
+      }
+      setJobId(newJobId)
+      // Polling will be handled by the useEffect hook
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setLoading(false)
+    }
   };
 
-  if (!hasGenerated) {
-    return <InputForm onGenerate={handleGenerate} lang={lang} />;
+  if (!generatedData) {
+    return <InputForm onGenerate={handleGenerate} lang={lang} isLoading={loading} />;
   }
 
   return (
@@ -902,6 +811,12 @@ const App = () => {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          {error && (
+          <div className="bg-red-900/30 border border-red-700 text-red-100 p-6 rounded-2xl mb-8">
+            <div className="font-bold mb-2">Error</div>
+            <pre className="whitespace-pre-wrap text-sm">{error}</pre>
+          </div>
+          )}
           {activeTab === 'dashboard' && <DashboardView data={generatedData} lang={lang} />}
           {activeTab === 'market' && <div className="text-center p-10"><PieChart size={48} className="mx-auto text-slate-300 mb-4"/><h3 className="text-xl text-slate-500 font-bold">Market Analysis Module</h3><p className="text-slate-400">AI has generated detailed STP. Please refer to Strategy & Roadmap for actionable insights.</p></div>}
           {activeTab === 'strategy' && <StrategyView lang={lang} data={generatedData} />}

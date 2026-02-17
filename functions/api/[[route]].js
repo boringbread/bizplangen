@@ -5,7 +5,7 @@ const app = new Hono().basePath('/api')
 
 const MAX_FIELD_LEN = 500
 
-// --- UTILITIES (from original file)
+// --- UTILITIES
 
 function asShortString(value, fieldName) {
   if (typeof value !== 'string') {
@@ -21,89 +21,171 @@ function asShortString(value, fieldName) {
   return trimmed
 }
 
-const SECTION_KEYS = [
-  'executive_summary', 'problem', 'solution', 'market', 'gtm', 
-  'business_model', 'competition', 'operations', 'team', 'risks', 
-  'milestones', 'financials'
-]
-
-function parseSectionedText(text) {
-  const out = {}
-  const re = /---SECTION:\s*([a-z_]+)---\s*\n([\s\S]*?)(?=\n---SECTION:|$)/g
-  let m
-  while ((m = re.exec(text)) !== null) {
-    const key = m[1]
-    const body = (m[2] ?? '').trim()
-    if (SECTION_KEYS.includes(key)) {
-      out[key] = { markdown: body }
-    }
-  }
-  for (const key of SECTION_KEYS) {
-    if (!out[key]) out[key] = { markdown: '' }
-  }
-  const marketMd = out.market?.markdown ?? ''
-  const tam = /\bTAM\s*:\s*(.+)/i.exec(marketMd)?.[1]?.trim()
-  const sam = /\bSAM\s*:\s*(.+)/i.exec(marketMd)?.[1]?.trim()
-  const som = /\bSOM\s*:\s*(.+)/i.exec(marketMd)?.[1]?.trim()
-  if (tam || sam || som) {
-    out.market.tam_sam_som = { tam: tam ?? '', sam: sam ?? '', som: som ?? '' }
-  }
-  return out
-}
-
 // --- BACKGROUND AI TASK
 
-async function runAiGeneration(db, ai, planId, industry, budget, vision) {
+async function runAiGeneration(db, ai, planId, industry, location) {
   try {
     // 1. Set status to 'running'
-    await db.prepare('UPDATE plans SET status = ? WHERE id = ?').bind('running', planId).run()
+    await db.prepare('UPDATE business_plans SET status = ? WHERE id = ?').bind('running', planId).run()
 
-    // 2. Formulate AI prompt
+    // 2. Define JSON schema and formulate prompt
+    const schema = {
+      type: 'object',
+      properties: {
+        gap: { type: 'string', description: "A concise paragraph identifying a gap in the market." },
+        solution: { type: 'string', description: "A concise paragraph describing the business's solution to the gap." },
+        vision: { type: 'string' },
+        mission: { type: 'string' },
+        currency: { type: 'string', description: "The currency for financial figures (e.g., 'USD')." },
+        tam: { type: 'number', description: "Total Addressable Market size as a numeric value." },
+        sam: { type: 'number', description: "Serviceable Addressable Market size as a numeric value." },
+        som: { type: 'number', description: "Serviceable Obtainable Market size as a numeric value." },
+        swot: {
+          type: 'object',
+          properties: {
+            strengths: { type: 'array', items: { type: 'string' } },
+            weaknesses: { type: 'array', items: { type: 'string' } },
+            opportunities: { type: 'array', items: { type: 'string' } },
+            threats: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['strengths', 'weaknesses', 'opportunities', 'threats']
+        },
+        pestel: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              factor: { type: 'string' },
+              description: { type: 'string' },
+            },
+            required: ['factor', 'description']
+          }
+        },
+        porters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              force_name: { type: 'string' },
+              value: { type: 'string' },
+            },
+            required: ['force_name', 'value']
+          }
+        },
+        financialProjections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              year: { type: 'string' },
+              revenue: { type: 'number' },
+              cogs: { type: 'number' },
+              opex: { type: 'number' },
+              netProfit: { type: 'number' },
+            },
+            required: ['year', 'revenue', 'cogs', 'opex', 'netProfit']
+          },
+          minItems: 5,
+          maxItems: 5
+        },
+        roadmap: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              year: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+            },
+            required: ['year', 'title', 'description']
+          },
+           minItems: 5,
+           maxItems: 5
+        },
+        risks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              risk_factor: { type: 'string' },
+              mitigation: { type: 'string' },
+            },
+            required: ['risk_factor', 'mitigation']
+          }
+        }
+      },
+      required: ['gap', 'solution', 'vision', 'mission', 'currency', 'tam', 'sam', 'som', 'swot', 'pestel', 'porters', 'financialProjections', 'roadmap', 'risks']
+    };
+
+    const systemPrompt = `You are a professional business plan generator. Generate a realistic, data-driven business plan for a ${industry} business in ${location}. Your output must be a JSON object that strictly adheres to the provided schema.`;
+    const userPrompt = `Generate the business plan for Industry: ${industry}, Location: ${location}.`;
+    
     const messages = [
-        { role: 'system', content: 'You are an expert startup consultant. Follow the exact output format. Do not add extra sections.' },
-        { role: 'user', content: [
-            'Create a concise but professional business plan. Use markdown within each section.',
-            '', `Inputs:`, `- industry: ${industry}`, `- budget: ${budget}`, `- vision: ${vision}`, '',
-            'OUTPUT FORMAT (MUST FOLLOW EXACTLY):',
-            '---SECTION: executive_summary---', '(markdown)',
-            '---SECTION: problem---', '(markdown)',
-            '---SECTION: solution---', '(markdown)',
-            '---SECTION: market---', '(markdown; include these lines somewhere: "TAM: ...", "SAM: ...", "SOM: ...")',
-            '---SECTION: gtm---', '(markdown)',
-            '---SECTION: business_model---', '(markdown)',
-            '---SECTION: competition---', '(markdown)',
-            '---SECTION: operations---', '(markdown)',
-            '---SECTION: team---', '(markdown)',
-            '---SECTION: risks---', '(markdown)',
-            '---SECTION: milestones---', '(markdown)',
-            '---SECTION: financials---', '(markdown; include assumptions as bullet list and a simple markdown table)',
-            '', 'Rules:', '- Do not wrap the whole answer in code fences.', '- Do not include any text outside the sections.', '- Use realistic assumptions and explicitly label them.'
-        ].join('\n') }
-    ]
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+    ];
 
     // 3. Run AI
-    const aiResponse = await ai.run('@cf/meta/llama-3.1-8b-instruct', { messages, temperature: 0.2, max_tokens: 4096 })
-    const text = aiResponse?.response ?? ''
-    const sections = parseSectionedText(text)
+    const aiResponse = await ai.run('@cf/meta/llama-3.1-8b-instruct', { 
+        messages, 
+        response_format: { type: 'json_schema', json_schema: schema },
+        max_tokens: 4096,
+    })
+    const result = aiResponse.response;
     
-    const foundAny = Object.values(sections).some(v => typeof v?.markdown === 'string' && v.markdown.trim().length > 0)
-    if (!foundAny) {
-      throw new Error('AI returned unexpected format: No sections were detected.')
+    // 4. Store results in the new structured tables
+    const batch = [
+        db.prepare('UPDATE business_plans SET vision = ?, mission = ?, gap = ?, solution = ?, currency = ? WHERE id = ?').bind(result.vision, result.mission, result.gap, result.solution, result.currency, planId),
+        db.prepare('INSERT INTO market_analysis (id, plan_id, tam, sam, som) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), planId, result.tam, result.sam, result.som)
+    ];
+
+    const swotTypes = {
+      strengths: 'strength',
+      weaknesses: 'weakness',
+      opportunities: 'opportunity',
+      threats: 'threat',
+    };
+
+    for (const pluralType in swotTypes) {
+        if (result.swot[pluralType]) {
+            const singularType = swotTypes[pluralType];
+            for (const statement of result.swot[pluralType]) {
+                batch.push(db.prepare('INSERT INTO swot_analysis (id, plan_id, type, statement) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), planId, singularType, statement));
+            }
+        }
+    }
+
+    for (const item of result.pestel) {
+        batch.push(db.prepare('INSERT INTO pestel_analysis (id, plan_id, factor, description) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), planId, item.factor, item.description));
     }
     
-    const result = { meta: { industry, budget, vision }, sections }
+    if (result.porters) {
+      for (const item of result.porters) {
+          batch.push(db.prepare('INSERT INTO porters_five_forces (id, plan_id, force_name, value) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), planId, item.force_name, item.value));
+      }
+    }
 
-    // 4. Store result and mark as 'done'
-    await db.prepare('UPDATE plans SET status = ?, result_json = ? WHERE id = ?')
-      .bind('done', JSON.stringify(result), planId)
-      .run()
+    for (const item of result.financialProjections) {
+        batch.push(db.prepare('INSERT INTO financial_projections (id, plan_id, year, revenue, cogs, opex, net_profit) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), planId, item.year, item.revenue, item.cogs, item.opex, item.netProfit));
+    }
+
+    for (const item of result.roadmap) {
+        batch.push(db.prepare('INSERT INTO roadmap (id, plan_id, year, title, description) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), planId, item.year, item.title, item.description));
+    }
+
+    for (const item of result.risks) {
+        batch.push(db.prepare('INSERT INTO risks (id, plan_id, risk_factor, mitigation) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), planId, item.risk_factor, item.mitigation));
+    }
+    
+    await db.batch(batch);
+
+    // 5. Mark as 'done'
+    await db.prepare('UPDATE business_plans SET status = ? WHERE id = ?').bind('done', planId).run()
 
   } catch (err) {
-    // 5. Store error and mark as 'error'
+    // 6. Store error and mark as 'error'
     const errorMessage = err instanceof Error ? err.message : String(err)
-    await db.prepare('UPDATE plans SET status = ?, error_message = ? WHERE id = ?')
-      .bind('error', errorMessage, planId)
-      .run()
+    await db.prepare('UPDATE business_plans SET status = ?, error_message = ? WHERE id = ?').bind('error', errorMessage, planId).run()
   }
 }
 
@@ -120,19 +202,18 @@ app.post('/generate', async (c) => {
 
     const body = await c.req.json()
     const industry = asShortString(body?.industry, 'industry')
-    const budget = asShortString(body?.budget, 'budget')
-    const vision = asShortString(body?.vision, 'vision')
+    const location = asShortString(body?.location, 'location')
 
     const planId = crypto.randomUUID()
 
     // Insert the new job into the database as 'queued'
     await db
-      .prepare('INSERT INTO plans (id, status, industry, budget, vision) VALUES (?, ?, ?, ?, ?)')
-      .bind(planId, 'queued', industry, budget, vision)
+      .prepare('INSERT INTO business_plans (id, status, industry, location) VALUES (?, ?, ?, ?)')
+      .bind(planId, 'queued', industry, location)
       .run()
     
     // Fire off the AI generation in the background, but don't wait for it
-    c.executionCtx.waitUntil(runAiGeneration(db, ai, planId, industry, budget, vision))
+    c.executionCtx.waitUntil(runAiGeneration(db, ai, planId, industry, location))
 
     // Immediately return the job ID
     return c.json({ jobId: planId }, 202) // 202 Accepted
@@ -155,18 +236,69 @@ app.get('/plan/:id', async (c) => {
       return c.json({ error: 'Missing plan ID' }, 400)
     }
 
-    const plan = await db.prepare('SELECT id, status, result_json, error_message FROM plans WHERE id = ?').bind(id).first()
+    const plan = await db.prepare('SELECT * FROM business_plans WHERE id = ?').bind(id).first()
 
     if (!plan) {
       return c.json({ error: 'Plan not found' }, 404)
     }
     
-    // If the result is stored as JSON, parse it before returning
-    if (plan.result_json) {
-      plan.result_json = JSON.parse(plan.result_json)
+    if (plan.status !== 'done') {
+        return c.json(plan);
     }
 
-    return c.json(plan)
+    // If done, fetch all related data and assemble the full plan
+    const results = await db.batch([
+        db.prepare('SELECT * FROM market_analysis WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM swot_analysis WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM pestel_analysis WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM porters_five_forces WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM financial_projections WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM roadmap WHERE plan_id = ?').bind(id),
+        db.prepare('SELECT * FROM risks WHERE plan_id = ?').bind(id)
+    ]);
+    
+    const market_analysis = results[0].results[0];
+    const swot_analysis = results[1].results;
+    const pestel_analysis = results[2].results;
+    const porters_five_forces = results[3].results;
+    const financial_projections = results[4].results;
+    const roadmap = results[5].results;
+    const risks = results[6].results;
+
+    const swot = { strengths: [], weaknesses: [], opportunities: [], threats: [] };
+    const pluralMap = {
+        strength: 'strengths',
+        weakness: 'weaknesses',
+        opportunity: 'opportunities',
+        threat: 'threats',
+    };
+
+    swot_analysis.forEach(s => {
+        const pluralType = pluralMap[s.type];
+        if (pluralType) {
+            swot[pluralType].push(s.statement);
+        }
+    });
+
+    const result_json = {
+        ...plan,
+        tam: market_analysis.tam,
+        sam: market_analysis.sam,
+        som: market_analysis.som,
+        swot: swot,
+        pestel: pestel_analysis,
+        porters: porters_five_forces,
+        financialProjections: financial_projections,
+        roadmap: roadmap,
+        risks: risks,
+    };
+
+    return c.json({
+        id: plan.id,
+        status: plan.status,
+        result_json: result_json
+    });
+
   } catch (err) {
     return c.json({ error: 'Failed to retrieve plan status', details: err.message }, 500)
   }
