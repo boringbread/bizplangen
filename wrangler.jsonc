@@ -14,15 +14,7 @@
 		{
 			"binding": "bizplangen_db",
 			"database_name": "bizplangen_db",
-			"database_id": "e62fb79d-88e7-4ab1-8307-80747c702bbb",
-			"migrations": [
-				{
-					"tag": "v1",
-					"sql_files": [
-						"schema.sql"
-					]
-				}
-			]
+			"database_id": "e62fb79d-88e7-4ab1-8307-80747c702bbb"
 		}
 	]
 }
