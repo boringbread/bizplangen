@@ -31,8 +31,8 @@ const Sidebar = ({ activeTab, setActiveTab, isMobileOpen, setIsMobileOpen, lang,
     { id: 'strategy', label: t.strategy, icon: Target },
     { id: 'roadmap', label: t.roadmap, icon: Layers },
     { id: 'financial', label: t.financial, icon: DollarSign },
-    { id: 'mentor', label: t.mentor, icon: Users },
-    { id: 'export', label: t.export, icon: Download },
+    //{ id: 'mentor', label: t.mentor, icon: Users },
+    //{ id: 'export', label: t.export, icon: Download },
   ];
 
   return (
@@ -636,7 +636,7 @@ const InputForm = ({ onGenerate, lang, isLoading }) => {
               <select 
                 value={industry} 
                 onChange={(e) => setIndustry(e.target.value)}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-black"
               >
                 <option value="Technology">Technology / SaaS</option>
                 <option value="FnB">Food & Beverage (Cafe/Resto)</option>
@@ -653,7 +653,7 @@ const InputForm = ({ onGenerate, lang, isLoading }) => {
                 type="text" 
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-black"
                 placeholder="e.g. Jakarta, Indonesia"
                 required
               />
@@ -822,8 +822,8 @@ const App = () => {
           {activeTab === 'strategy' && <StrategyView lang={lang} data={generatedData} />}
           {activeTab === 'financial' && <FinancialView data={generatedData} lang={lang} />}
           {activeTab === 'roadmap' && <RoadmapView lang={lang} data={generatedData} />}
-          {activeTab === 'mentor' && <MentorExportView lang={lang} contextData={generatedData} />}
-          {activeTab === 'export' && <MentorExportView lang={lang} contextData={generatedData} />}
+          {/* {activeTab === 'mentor' && <MentorExportView lang={lang} contextData={generatedData} />} */}
+          {/* {activeTab === 'export' && <MentorExportView lang={lang} contextData={generatedData} />} */}
         </main>
       </div>
     </div>
